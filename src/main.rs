@@ -12,9 +12,9 @@ struct PrivatePublicKeyPair {
 }
 
 fn generate_private_public_key_pair() -> PrivatePublicKeyPair {
-    let random = SystemRandom::new();
+    let random = SystemRandom::new(); //
 
-    let pkcs8_doc = Ed25519KeyPair::generate_pkcs8(&random).unwrap();
+    let pkcs8_doc = Ed25519KeyPair::generate_pkcs8(&random).unwrap(); 
     let key_pair = Ed25519KeyPair::from_pkcs8(pkcs8_doc.as_ref()).unwrap();
 
     PrivatePublicKeyPair {
@@ -39,7 +39,7 @@ struct Server {
 
 struct Certificate {
     public_key: Vec<u8>,
-    server_id: String
+    server_id: String 
 }
 
 struct InitSessionMessage {
@@ -52,6 +52,7 @@ struct InitSessionResponse {
 }
 
 impl Client {
+    // Associated function: client constructor
     fn new() -> Self {
         return Self {
             ephemeral_key_pair: PrivatePublicKeyPair {
@@ -63,7 +64,7 @@ impl Client {
     }
 
     fn initialise_session(&mut self) -> InitSessionMessage {
-        self.ephemeral_key_pair = generate_private_public_key_pair();
+        self.ephemeral_key_pair = generate_private_public_key_pair(); // client just needs the ephemeral key pair
 
         return InitSessionMessage {
             client_ephemeral_public_key: self.ephemeral_key_pair.public_key.clone()
@@ -77,11 +78,34 @@ impl Client {
     ) -> bool {
         //  Compute (sk0, sk) = H(Y^x, B^x, server_id, X, Y, "ntor");
 
-        let ephemeral_public_key_point = CompressedEdwardsY(*msg.server_ephemeral_public_key.as_ref()).decompress().unwrap();
-        let static_public_key_point = CompressedEdwardsY(*server_certificate.public_key.as_ref()).decompress().unwrap();
+        let server_ephemeral_public_key: &[u8; 32] = match msg.server_ephemeral_public_key.as_slice().try_into() {
+            Ok(array_ref) => array_ref,
+            Err(e) => {
+                println!("Error: server_ephemeral_public_key was not 32 bytes long: {}", e);
+                panic!("Invalid server ephemeral public key length");
+            }
+        };
+        let ephemeral_public_key_point = CompressedEdwardsY(*server_ephemeral_public_key).decompress().unwrap();
+        
+        let server_static_public_key: &[u8; 32] = match server_certificate.public_key.as_slice().try_into() {
+            Ok(array_ref) => array_ref,
+            Err(e) => {
+                println!("Error: server_static_public_key was not 32 bytes long: {}", e);
+                panic!("Invalid server static public key length");
+            }
+        };
+        let static_public_key_point = CompressedEdwardsY(*server_static_public_key).decompress().unwrap();
+
+        let client_ephemeral_private_key: &[u8; 32] = match self.ephemeral_key_pair.private_key.as_slice().try_into() {
+            Ok(array_ref) => array_ref,
+            Err(e) => {
+                println!("Error: client_ephemeral_private_key was not 32 bytes long: {}", e);
+                panic!("Invalid client ephemeral private key length");
+            }
+        };
 
         let eph_private_key_scalar=
-            Scalar::from_bytes_mod_order(*self.ephemeral_key_pair.private_key.as_ref());
+            Scalar::from_bytes_mod_order(*client_ephemeral_private_key);
 
         let first_hash = &eph_private_key_scalar * &ephemeral_public_key_point;
         let second_hash = &eph_private_key_scalar * &static_public_key_point;
@@ -96,7 +120,14 @@ impl Client {
 
         let mut hasher = Sha256::new();
         hasher.update(buffer);
-        let sha256_hash: &[u8] = hasher.finalize().as_ref();
+        let sha256_hash = hasher.finalize();
+        let sha256_hash: &[u8; 32] = match sha256_hash.as_slice().try_into() {
+            Ok(array_ref) => array_ref,
+            Err(e) => {
+                println!("Error: sha256_hash was not 32 bytes long: {}", e);
+                panic!("Invalid sha256 hash length");
+            }
+        };
 
         let secret_key_prime = &sha256_hash[0..128];
         let secret_key = &sha256_hash[128..];
@@ -122,8 +153,10 @@ impl Client {
 
             println!("Success! Shared secret:");
             println!("{:?}", secret_key);
+            return true;
         } else {
             println!("Failed to verify the shared secret");
+            return false;
         }
     }
 }
@@ -155,11 +188,38 @@ impl Server {
 
         // calculate H(X^y, X^b, server_id, X, Y, "ntor")
 
-        let public_key_point = CompressedEdwardsY(*init_msg.client_ephemeral_public_key.as_ref()).decompress().unwrap();
+        let client_ephemeral_public_key: &[u8; 32] = match init_msg.client_ephemeral_public_key.as_slice().try_into() {
+            Ok(array_ref) => array_ref,
+            Err(e) => {
+                println!("Error: client_ephemeral_public_key was not 32 bytes long: {}", e);
+                panic!("Invalid client ephemeral public key length");
+            }
+        };      
+        let public_key_point = CompressedEdwardsY(*client_ephemeral_public_key).decompress().unwrap();
+        
+        let ephemeral_key_pair_private_key: &[u8; 32] = match self.ephemeral_key_pair.private_key.as_slice().try_into(){
+            Ok(array_ref) => array_ref,
+            Err(e) => {
+                println!("Error: ephemeral_key_pair_private_key was not 32 bytes long: {}", e);
+                print!("{:?}", self.ephemeral_key_pair.private_key.as_slice());
+                panic!("Invalid ephemeral key pair private key length");
+            }
+        };
+        
         let eph_private_key_scalar=
-            Scalar::from_bytes_mod_order(*self.ephemeral_key_pair.private_key.as_ref());
+            Scalar::from_bytes_mod_order(*ephemeral_key_pair_private_key);
+        
+
+        let static_key_pair_private_key: &[u8; 32] = match self.static_key_pair.private_key.as_slice().try_into(){
+            Ok(array_ref) => array_ref,
+            Err(e) => {
+                println!("Error: static_key_pair_private_key was not 32 bytes long: {}", e);
+                panic!("Invalid static key pair private key length");
+            }
+        };
+        
         let static_private_key_scalar =
-            Scalar::from_bytes_mod_order(*self.static_key_pair.private_key.as_ref());
+            Scalar::from_bytes_mod_order(*static_key_pair_private_key);
 
         let first_hash = eph_private_key_scalar * public_key_point;
         let second_hash = static_private_key_scalar * public_key_point;
@@ -174,7 +234,14 @@ impl Server {
 
         let mut hasher = Sha256::new();
         hasher.update(buffer);
-        let sha256_hash: &[u8] = hasher.finalize().as_ref();
+        let sha256_hash = hasher.finalize();
+        let sha256_hash: &[u8;32] = match sha256_hash.as_slice().try_into() {
+            Ok(array_ref) => array_ref,
+            Err(e) => {
+                println!("Error: sha256_hash was not 32 bytes long: {}", e);
+                panic!("Invalid sha256 hash length");
+            }
+        };
 
         let secret_key_prime = &sha256_hash[0..128];
         let secret_key = &sha256_hash[128..];
@@ -209,10 +276,12 @@ fn main() {
     let mut client = Client::new();
 
     let server_id = String::from("my server id");
-    let mut server = Server::new(server_id);
+    let mut server   = Server::new(server_id);
 
     let init_session_msg = client.initialise_session();
     let init_session_response = server.accept_init_session_request(&init_session_msg);
 
     client.handle_response_from_server(&server.get_certificate(), &init_session_response);
 }
+
+
