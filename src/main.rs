@@ -1,26 +1,12 @@
-//Veronica's
-//use ring::rand::SystemRandom;
-//use ring::signature::{Ed25519KeyPair, KeyPair}; // I'm using ring to generate the keypair
-
-//use std::io::Read;
-
 use sha2::{Sha256, Digest};
-//use curve25519_dalek::edwards::{CompressedEdwardsY};
-//use curve25519_dalek::scalar::Scalar;
 use hmac::{Hmac, Mac};
-
-// Gemeni's Suggestions
-// x25519 is purpose built for Diffie-Hellman key exchange and that's what we're doing so let's go with that.
 use x25519_dalek::{PublicKey, StaticSecret};
-// use rand::rngs::OsRng;
 use rand_core::OsRng;
-
-// House Keeping
-type HmacSha256 = Hmac<Sha256>;
 
 /*Ravi's Hack of the nTOR Protocol*/
 struct PrivatePublicKeyPair {
-    // Oh shit! To make it work, we need to use the StaticSecret type even though it's ephemeral?
+    // In the future, type StaticSecret should be reserved for the server's static and the EphemeralSecret reserved for the ephemeral private key. 
+    // However, as a quirk of the nTOR protocol, we also need to use StaticSecret for the client's ephemeral private key hence why it is adopted here.  
     private_key: Option<StaticSecret>,
     public_key: PublicKey,
 }
@@ -78,35 +64,54 @@ impl Client {
         }
     }
 
-    // Steps 15 - 20 of the original paper.
+    // Steps 15 - 20 of the Goldberg 2012 paper.
     fn handle_response_from_server( 
         &mut self,
         server_certificate: &Certificate,
         msg: &InitSessionResponse,
     ) -> bool {
         // Step 15: Verify that the session state exists
-        println!("[Step 15] Client verifies that the session state exists");
+        println!("[Step 15] Client verifies that the session state exists.");
     
-        // Step 16: Retrieve the server's Certificate, client's ephemeral private key, and client's ephemeral public key. In this case, we are receiving the certificate as an input parameter instead of from state. All we need to do therefore is extract the public key and server ID into local variables. 
-        let _server_id = server_certificate.server_id.clone();
-        let _server_ephemeral_public_key: PublicKey = server_certificate.public_key.clone();
+        // Step 16: Retrieve the server's Certificate, client's ephemeral private key, and client's ephemeral public key. In this case, we are receiving the certificate as an input parameter instead of from state. All we need to do therefore is extract the public key and server ID into local variables.
+        println!("[Step 16] Client retrieves the server'scertificate."); 
+        let server_id = server_certificate.server_id.clone();
+        let server_ephemeral_public_key: PublicKey = server_certificate.public_key.clone();
+        println!("server_id: {}", server_id);
+        println!("server_ephemeral_public_key: {:?}", server_ephemeral_public_key);
 
         // Step 17: Verify that the server's public key is valid. 
         println!("[Step 17] It is unnecessary to verify a public key when using the X25519 curve: all points are valid.");
         
         // Step 18: Compute the shared secret: fuck yeah.
+        println!("[Step 18] Compute the shared secret.");
         let mut buffer: Vec<u8> = Vec::new();
+
+        // ECDH Client private ephemeral * server static public key 
         let taken_private_key = self.ephemeral_key_pair.private_key.take().unwrap();
         let mut ecdh_result_1 = taken_private_key.diffie_hellman(&server_certificate.public_key).to_bytes().to_vec();
-        let mut ecdh_result_2 = taken_private_key.diffie_hellman(&msg.server_ephemeral_public_key).to_bytes().to_vec();
-
-        let mut hasher = Sha256::new();
         buffer.append(&mut ecdh_result_1);
+        println!("[Debug] ECDH result 1: {:?}", ecdh_result_1);
+
+        // ECDH Client private ephemeral * server ephemeral public Key
+        let mut ecdh_result_2 = taken_private_key.diffie_hellman(&msg.server_ephemeral_public_key).to_bytes().to_vec();    
         buffer.append(&mut ecdh_result_2);
+        println!("[Debug] ECDH result 2: {:?}", ecdh_result_2);
+
+        // Server ID
         buffer.append(&mut server_certificate.server_id.as_bytes().to_vec());
+        
+        // Client ephemeral public
         buffer.append(&mut self.ephemeral_key_pair.public_key.as_bytes().to_vec()); 
+        
+        // Server ephemeral public
         buffer.append(&mut msg.server_ephemeral_public_key.as_bytes().to_vec());
+
+        // "ntor" string identifier
         buffer.append(&mut "ntor".as_bytes().to_vec());
+        
+        // Instantiate and run hashing funciton 
+        let mut hasher = Sha256::new();
         hasher.update(buffer);
         let sha256_hash = hasher.finalize();
         let sha256_hash: &[u8; 32] = match sha256_hash.as_slice().try_into() {
@@ -119,15 +124,17 @@ impl Client {
 
         let secret_key_prime = &sha256_hash[0..16];
         let secret_key = &sha256_hash[16..];
-
+        println!("[DEBUG] Client secret key prime: {:?}", secret_key_prime);
+    
         // Step 19: Compute the HMAC (t_b in the paper) of secret_key_prime, server_id, server_static_public_key, server_ephemeral_public key, "ntor", and "server".
-        let mut hmac_data: Vec<u8> = Vec::new();
-        hmac_data.append(&mut secret_key_prime.to_vec());
-        hmac_data.append(&mut server_certificate.server_id.as_bytes().to_vec());
-        hmac_data.append(&mut msg.server_ephemeral_public_key.as_bytes().to_vec());
-        hmac_data.append(&mut "ntor".as_bytes().to_vec());
-        hmac_data.append(&mut "server".as_bytes().to_vec());
-        let hmac_hash = HmacSha256::new_from_slice(&*hmac_data).unwrap(); 
+        println!("[Step 19] Compute the transcript t_b for comparison.");
+        let mut buffer: Vec<u8> = Vec::new();
+        buffer.append(&mut secret_key_prime.to_vec());
+        buffer.append(&mut server_certificate.server_id.as_bytes().to_vec());
+        buffer.append(&mut msg.server_ephemeral_public_key.as_bytes().to_vec());
+        buffer.append(&mut "ntor".as_bytes().to_vec());
+        buffer.append(&mut "server".as_bytes().to_vec());
+        let hmac_hash = Hmac::<Sha256>::new_from_slice(&*buffer).unwrap(); 
         let computed_t_hash = hmac_hash.finalize().into_bytes().to_vec();
 
         // assert that computed_t_b_hash equals t_hash generated by server
@@ -147,13 +154,11 @@ impl Client {
 
 impl Server {
     fn new(server_id: String) -> Self {
-        // In the future, this static keypair needs to be handled differently.
-        // That is, internally the type for the private key should be x25519_dalek::StaticSecret.
-        let static_key_pair = generate_private_public_key_pair();
+        // In the future, implementations of static and ephemeral key pair generation should differ.
         return Self{
-            static_key_pair,
             server_id,
             shared_secret: None,
+            static_key_pair: generate_private_public_key_pair(),
             ephemeral_key_pair: generate_private_public_key_pair(),
         }
     }
@@ -167,37 +172,46 @@ impl Server {
     }
 
     fn accept_init_session_request(&mut self, init_msg: &InitSessionMessage) -> InitSessionResponse {
-        // Step 9: Normally, it would be necessary to verify that the client's ephemeral public key is valid.
-        // However, the X25519 makes it so that all points are valid.
+        // Step 9: Normally, it would be necessary to verify that the client's ephemeral public key is valid. However, the X25519 makes it so that all points are valid.
         println!("[Step 9] It is unnecessary to verify the client's public key when using the X25519 curve.");
 
         // Step 10: Obtain an ephemeral key pair specific to this session and this client. And set the session ID to a hash of the server's ephemeral public key.
-        self.ephemeral_key_pair = generate_private_public_key_pair();
-        let session_id = HmacSha256::new_from_slice(&self.ephemeral_key_pair.public_key.as_bytes().to_vec()).unwrap();
+        println!("[Step 10] Get an ephemeral key pair and set the session ID");
+        let session_id = Hmac::<Sha256>::new_from_slice(&self.ephemeral_key_pair.public_key.as_bytes().to_vec()).unwrap();
         let session_id = session_id.finalize().into_bytes().to_vec();
         println!("The Server's Session ID for this connection is: {:?}", session_id);
 
-        // Step 11: Compute the shared secret using 
-        // - client_public_ephemeral^server_ephemeral_private (X^y), 
-        // - client_public_ephemeral^server_static_private (X^b),
-        // - server_id
-        // - client_public_ephemeral (X)
-        // - server_public_ephemeral (Y)
-        // - "ntor"
+        // Step 11: Compute the shared secret server side.
+        println!("[Step 11]: Compute the shared secrete server side");
 
-        let mut hasher = Sha256::new();
-        let mut buffer_to_hash: Vec<u8> = Vec::new();
+        let mut buffer: Vec<u8> = Vec::new();
+        // - client_public_ephemeral^server_ephemeral_private (X^y), 
         let taken_private_key = self.ephemeral_key_pair.private_key.take().unwrap();
         let mut ecdh_results_1 = taken_private_key.diffie_hellman(&init_msg.client_ephemeral_public_key).to_bytes().to_vec();
-        buffer_to_hash.append(&mut ecdh_results_1);
+        println!("[Debug] ECDH result 1: {:?}", ecdh_results_1);
+        buffer.append(&mut ecdh_results_1);
 
+        // - client_public_ephemeral^server_static_private (X^b),
+        let taken_private_key = self.static_key_pair.private_key.take().unwrap();
         let mut ecdh_results_2 = taken_private_key.diffie_hellman(&init_msg.client_ephemeral_public_key).to_bytes().to_vec();
-        buffer_to_hash.append(&mut ecdh_results_2);
-        buffer_to_hash.append(&mut self.server_id.as_bytes().to_vec());
-        buffer_to_hash.append(&mut init_msg.client_ephemeral_public_key.to_bytes().to_vec());
-        buffer_to_hash.append(&mut self.ephemeral_key_pair.public_key.to_bytes().to_vec());
-        buffer_to_hash.append(&mut "ntor".as_bytes().to_vec());
-        hasher.update(buffer_to_hash);
+        buffer.append(&mut ecdh_results_2);
+                println!("[Debug] ECDH result 2: {:?}", ecdh_results_2);
+        
+        // - server_id
+        buffer.append(&mut self.server_id.as_bytes().to_vec());
+
+        // - client_public_ephemeral (X)
+        buffer.append(&mut init_msg.client_ephemeral_public_key.to_bytes().to_vec());
+
+        // - server_public_ephemeral (Y)
+        buffer.append(&mut self.ephemeral_key_pair.public_key.to_bytes().to_vec());
+
+        // - "ntor"
+        buffer.append(&mut "ntor".as_bytes().to_vec());
+        
+        // Instantiate hash function and compute
+        let mut hasher = Sha256::new();
+        hasher.update(buffer);
         let sha256_hash = hasher.finalize();
         let sha256_hash: &[u8;32] = match sha256_hash.as_slice().try_into() {
             Ok(array_ref) => array_ref,
@@ -209,22 +223,22 @@ impl Server {
 
         let secret_key_prime = &sha256_hash[0..16];
         let secret_key = &sha256_hash[16..];
+        println!("[DEBUG] Server secret key prime: {:?}", secret_key_prime);
 
         // Step 12: Compute the HMAC (t_b in the paper) of:
-        // -secret_key_prime,
-        // -server_id,
-        // -server_ephemeral_public_key,
-        // -client_ephemeral_public_key
-        // -"ntor"
-        // -"server"
-        
         let mut hasher = Sha256::new();
         let mut buffer_to_hash: Vec<u8> = Vec::new();
+        // -secret_key_prime,
         buffer_to_hash.append(&mut secret_key_prime.to_vec());
+        // -server_id,
         buffer_to_hash.append(&mut self.server_id.as_bytes().to_vec());
+        // -server_ephemeral_public_key,
         buffer_to_hash.append(&mut self.ephemeral_key_pair.public_key.to_bytes().to_vec());
+        // -client_ephemeral_public_key
         buffer_to_hash.append(&mut init_msg.client_ephemeral_public_key.to_bytes().to_vec());
-        buffer_to_hash.append(&mut "ntor".as_bytes().to_vec());
+        // -"ntor"
+              buffer_to_hash.append(&mut "ntor".as_bytes().to_vec());
+        // -"server"
         buffer_to_hash.append(&mut "server".as_bytes().to_vec());
         hasher.update(buffer_to_hash);
         let sha256_hash = hasher.finalize();
@@ -264,7 +278,9 @@ fn main() {
     let init_session_response = server.accept_init_session_request(&init_session_msg);
 
     // Step 5: "Accept" the response from the server.
-    client.handle_response_from_server(&server.get_certificate(), &init_session_response);
+    let success_flag = client.handle_response_from_server(&server.get_certificate(), &init_session_response);
+
+    println!("{success_flag}");
 }
 
 
