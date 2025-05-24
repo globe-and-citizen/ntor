@@ -12,7 +12,8 @@ use hmac::{Hmac, Mac};
 // Gemeni's Suggestions
 // x25519 is purpose built for Diffie-Hellman key exchange and that's what we're doing so let's go with that.
 use x25519_dalek::{PublicKey, StaticSecret};
-use rand_core::rngs::OsRng;
+// use rand::rngs::OsRng;
+use rand_core::OsRng;
 
 // House Keeping
 type HmacSha256 = Hmac<Sha256>;
@@ -116,8 +117,8 @@ impl Client {
             }
         };
 
-        let secret_key_prime = &sha256_hash[0..128];
-        let secret_key = &sha256_hash[128..];
+        let secret_key_prime = &sha256_hash[0..16];
+        let secret_key = &sha256_hash[16..];
 
         // Step 19: Compute the HMAC (t_b in the paper) of secret_key_prime, server_id, server_static_public_key, server_ephemeral_public key, "ntor", and "server".
         let mut hmac_data: Vec<u8> = Vec::new();
@@ -206,8 +207,8 @@ impl Server {
             }
         };
 
-        let secret_key_prime = &sha256_hash[0..128];
-        let secret_key = &sha256_hash[128..];
+        let secret_key_prime = &sha256_hash[0..16];
+        let secret_key = &sha256_hash[16..];
 
         // Step 12: Compute the HMAC (t_b in the paper) of:
         // -secret_key_prime,
