@@ -8,3 +8,5 @@ ring = "0.17.8"
 hmac = "0.12"
 sha2 = "0.10"
 curve25519-dalek = "4.1.1"
+x25519-dalek = {version="^2.0.1", features = ["static_secrets"] }
+rand_core = {version="^0.9.3", features = ["std"]}
