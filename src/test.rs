@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::{Client, generate_private_public_key_pair, Server};
+    use crate::{Client, Server, generate_private_public_key_pair};
 
     #[test]
     fn test_generate_private_public_key_pair() {
@@ -14,7 +14,10 @@ mod tests {
             "Public key should not be empty"
         );
 
-        println!("Private key: {:?}", key_pair.private_key.unwrap().as_bytes());
+        println!(
+            "Private key: {:?}",
+            key_pair.private_key.unwrap().as_bytes()
+        );
         println!("Public key: {:?}\n", key_pair.public_key);
     }
 
@@ -24,7 +27,7 @@ mod tests {
         let mut client = Client::new();
 
         // Spin up a server
-        let mut server   = Server::new(String::from("test_server_id"));
+        let mut server = Server::new(String::from("test_server_id"));
 
         // Client initializes session with the server
         let init_session_msg = client.initialise_session();
@@ -33,8 +36,10 @@ mod tests {
         let init_session_response = server.accept_init_session_request(&init_session_msg);
 
         // Client processes response from the server and verifies it authenticity
-        let success_flag = client.handle_response_from_server(&server.get_certificate(), &init_session_response);
+        let success_flag =
+            client.handle_response_from_server(&server.get_certificate(), &init_session_response);
 
         assert!(success_flag);
+        assert_eq!(client.shared_secret, server.shared_secret)
     }
 }
