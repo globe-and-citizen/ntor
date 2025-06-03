@@ -1,0 +1,14 @@
+name: Unit Tests and Static Analysis
+on: [push]
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install Cargo
+        run: sudo apt update && sudo apt install rustc && cargo -v
+      - name: Run Unit Tests
+        run: cargo test -- --show-output
+      - name: Static Analysis
+        run: cargo clippy
