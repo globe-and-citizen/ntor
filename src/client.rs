@@ -4,12 +4,14 @@ use hmac::{Hmac, Mac};
 use hmac::digest::Digest;
 use crate::common::{
     Certificate,
-    generate_private_public_key_pair,
     InitSessionMessage,
     InitSessionResponse,
+    NTorParty,
     PrivatePublicKeyPair
 };
+use crate::helpers::{generate_private_public_key_pair};
 
+#[derive(Clone)]
 pub struct Client {
     ephemeral_key_pair: PrivatePublicKeyPair,
     pub(crate) shared_secret: Option<Vec<u8>>,
@@ -114,5 +116,11 @@ impl Client {
             println!("Failed to verify the shared secret: try again bro.");
             false
         }
+    }
+}
+
+impl NTorParty for Client {
+    fn get_shared_secret(&self) -> Option<Vec<u8>> {
+        self.shared_secret.clone()
     }
 }

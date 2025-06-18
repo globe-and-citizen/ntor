@@ -1,14 +1,9 @@
-use x25519_dalek::PublicKey;
+use x25519_dalek::{PublicKey, StaticSecret};
 use sha2::Sha256;
 use hmac::{Hmac, Mac};
 use hmac::digest::Digest;
-use crate::common::{
-    Certificate,
-    generate_private_public_key_pair,
-    InitSessionMessage,
-    InitSessionResponse,
-    PrivatePublicKeyPair
-};
+use crate::common::{Certificate, InitSessionMessage, InitSessionResponse, NTorParty, PrivatePublicKeyPair};
+use crate::helpers::{generate_private_public_key_pair};
 
 pub struct Server {
     static_key_pair: PrivatePublicKeyPair,
@@ -28,6 +23,22 @@ impl Server {
             server_id,
             shared_secret: None,
             static_key_pair: generate_private_public_key_pair(),
+        }
+    }
+
+    pub fn new_with_secret(server_id: String, secret: [u8; 32]) -> Self {
+        let static_private_key = StaticSecret::from(secret);
+        Self {
+            ephemeral_key_pair: PrivatePublicKeyPair {
+                private_key: None,
+                public_key: PublicKey::from([0; 32]),
+            },
+            server_id,
+            shared_secret: None,
+            static_key_pair: PrivatePublicKeyPair {
+                private_key: Some(static_private_key.clone()),
+                public_key: PublicKey::from(&static_private_key),
+            },
         }
     }
 
@@ -120,5 +131,11 @@ impl Server {
             server_ephemeral_public_key: self.ephemeral_key_pair.public_key,
             t_b_hash,
         }
+    }
+}
+
+impl NTorParty for Server {
+    fn get_shared_secret(&self) -> Option<Vec<u8>> {
+        self.shared_secret.clone()
     }
 }
