@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use crate::{Client, Server, generate_private_public_key_pair};
+    use crate::client::Client;
+    use crate::common::generate_private_public_key_pair;
+    use crate::server::Server;
 
     #[test]
     fn test_generate_private_public_key_pair() {
