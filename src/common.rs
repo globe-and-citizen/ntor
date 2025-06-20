@@ -26,6 +26,20 @@ pub struct Certificate {
     pub(crate) server_id: String,
 }
 
+impl Certificate {
+    pub fn new(public_key: Vec<u8>, server_id: String) -> Self {
+        let pub_key = TryInto::<[u8; 32]>::try_into(public_key).unwrap();
+        Certificate {
+            public_key: PublicKey::from(pub_key),
+            server_id
+        }
+    }
+
+    pub fn public_key(&self) -> Vec<u8> {
+        self.public_key.to_bytes().to_vec()
+    }
+}
+
 // In the paper, the outgoing message is ("ntor", B_id, client_ephemeral_public_key).
 pub struct InitSessionMessage {
     pub(crate) client_ephemeral_public_key: PublicKey,
@@ -38,12 +52,30 @@ impl InitSessionMessage {
             client_ephemeral_public_key: PublicKey::from(u8_array),
         }
     }
+
+    pub fn public_key(&self) -> Vec<u8> {
+        self.client_ephemeral_public_key.to_bytes().to_vec()
+    }
 }
 
 // In the paper, the return message is ("ntor", server_ephemeral_public_key, t_b_hash).
 pub struct InitSessionResponse {
     pub(crate) server_ephemeral_public_key: PublicKey,
     pub(crate) t_b_hash: Vec<u8>,
+}
+
+impl InitSessionResponse {
+    pub fn new(public_key: Vec<u8>, t_b_hash: Vec<u8>) -> Self {
+        let pub_key = TryInto::<[u8; 32]>::try_into(public_key).unwrap();
+        return InitSessionResponse {
+            server_ephemeral_public_key: PublicKey::from(pub_key),
+            t_b_hash,
+        }
+    }
+
+    pub fn public_key(&self) -> Vec<u8> {
+        self.server_ephemeral_public_key.to_bytes().to_vec()
+    }
 }
 
 pub struct EncryptedMessage {
@@ -74,6 +106,36 @@ pub trait NTorParty {
         if let Some(key) = self.get_shared_secret() {
             let decrypt_key = key_derivation(&key);
             return helpers::decrypt(encrypted_message.nonce, decrypt_key, encrypted_message.data);
+        }
+        Err("no decryption key found")
+    }
+
+    fn wasm_encrypt(&self, data: Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), &'static str> {
+        if let Some(key) = self.get_shared_secret() {
+            let encrypt_key = key_derivation(&key);
+            return match helpers::wasm_encrypt(encrypt_key, data) {
+                Ok((nonce, encrypted_message)) => {
+                    Ok((nonce.to_vec(), encrypted_message))
+                }
+                Err(err) => Err(err)
+            }
+        }
+        Err("no encryption key found")
+    }
+
+    fn wasm_decrypt(&self, nonce: Vec<u8>, data: Vec<u8>) -> Result<Vec<u8>, &'static str> {
+        if let Some(key) = self.get_shared_secret() {
+            let decrypt_key = key_derivation(&key);
+            // return helpers::wasm_decrypt(nonce, decrypt_key, encrypted_message.data);
+            return match TryInto::<[u8; 12]>::try_into(nonce) {
+                Ok(nonce12) => {
+                    return match helpers::wasm_decrypt(nonce12, decrypt_key, data) {
+                        Ok(decrypted) => Ok(decrypted),
+                        Err(err) => Err(err)
+                    }
+                },
+                Err(_err) => Err("invalid nonce")
+            }
         }
         Err("no decryption key found")
     }

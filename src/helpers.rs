@@ -1,10 +1,14 @@
 use std::convert::TryInto;
-use ring::aead;
+use aes_gcm::{Aes256Gcm, Key, KeyInit, Nonce};
+use aes_gcm::aead::Aead;
 use log::error;
-use ring::rand::{SecureRandom, SystemRandom};
 use x25519_dalek::{PublicKey, StaticSecret};
-use rand_core::OsRng;
 use crate::common::PrivatePublicKeyPair;
+
+// wasm incompatible imports
+use ring::aead;
+use ring::rand::{SecureRandom, SystemRandom};
+
 
 /// Returns an array of zeros if conversion fails.
 pub fn vec_to_array32(vec: Vec<u8>) -> [u8; 32] {
@@ -16,7 +20,9 @@ pub fn vec_to_array32(vec: Vec<u8>) -> [u8; 32] {
 }
 
 pub fn generate_private_public_key_pair() -> PrivatePublicKeyPair {
-    let private_key = StaticSecret::random_from_rng(OsRng);
+    let mut buf = [0u8; 32];
+    getrandom::getrandom(&mut buf).expect("generate random failed");
+    let private_key = StaticSecret::from(buf);
     let public_key = PublicKey::from(&private_key);
 
     PrivatePublicKeyPair {
@@ -66,5 +72,43 @@ pub(crate) fn decrypt(nonce_bytes: [u8; 12], key_bytes: Vec<u8>, mut data: Vec<u
 
     // debug!("Decrypted: {:?}", String::from_utf8_lossy(decrypted_data));
     Ok(decrypted_data.to_vec())
+}
+
+pub(crate) fn wasm_encrypt(key_bytes: Vec<u8>, data: Vec<u8>) -> Result<([u8; 12], Vec<u8>), &'static str> {
+    if key_bytes.len() != 32 {
+        return Err("Invalid key length for AES-256");
+    }
+
+    let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
+    let cipher = Aes256Gcm::new(key);
+
+    let mut nonce_bytes = [0u8; 12];
+    getrandom::getrandom(&mut nonce_bytes).map_err(|_| "Random generation failed")?;
+    let nonce = Nonce::from_slice(&nonce_bytes); // 96-bits; unique per message
+
+    let ciphertext = cipher
+        .encrypt(nonce, data.as_ref())
+        .map_err(|_| "Encryption failed")?;
+
+    Ok((nonce_bytes, ciphertext))
+}
+
+pub(crate) fn wasm_decrypt(nonce_bytes: [u8; 12], key: Vec<u8>, ciphertext: Vec<u8>) -> Result<Vec<u8>, &'static str> {
+    return match TryInto::<[u8; 32]>::try_into(key) {
+        Ok(key_bytes) => {
+            let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
+            let cipher = Aes256Gcm::new(key);
+            let nonce = Nonce::from_slice(&nonce_bytes);
+
+            let decrypted_data = cipher
+                .decrypt(nonce, ciphertext.as_ref())
+                .map_err(|_| "Decryption failed")?;
+
+            Ok(decrypted_data)
+        }
+        Err(_) => {
+            Err("Invalid key")
+        }
+    }
 }
 

@@ -4,13 +4,21 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ring = "0.17.8"
 hmac = "0.12"
 sha2 = "0.10"
 curve25519-dalek = "4.1.1"
 x25519-dalek = {version="^2.0.1", features = ["static_secrets"] }
+
+# wasm incompatible
+ring = "0.17.8"
 rand_core = {version="0.6.4", features = ["std"]}
 rand = "0.9.1"
+
+#wasm compatible
+getrandom = { version = "0.2", features = ["js"] }
+aes-gcm = "0.10"
+serde = { version = "1.0.219", features = ["derive"] }
+
 log = "0.4.26"
 hex = "0.4.3"
 
