@@ -3,7 +3,7 @@ use sha2::Sha256;
 use hmac::{Hmac, Mac};
 use hmac::digest::Digest;
 use crate::common::{
-    Certificate,
+    NTorCertificate,
     InitSessionMessage,
     InitSessionResponse,
     NTorParty,
@@ -12,12 +12,12 @@ use crate::common::{
 use crate::helpers::{generate_private_public_key_pair};
 
 #[derive(Clone)]
-pub struct Client {
+pub struct NTorClient {
     ephemeral_key_pair: PrivatePublicKeyPair,
     pub(crate) shared_secret: Option<Vec<u8>>,
 }
 
-impl Client {
+impl NTorClient {
     pub fn new() -> Self {
         Self {
             ephemeral_key_pair: PrivatePublicKeyPair {
@@ -39,7 +39,7 @@ impl Client {
     // Steps 15 - 20 of the Goldberg 2012 paper.
     pub fn handle_response_from_server(
         &mut self,
-        server_certificate: &Certificate,
+        server_certificate: &NTorCertificate,
         msg: &InitSessionResponse,
     ) -> bool {
         println!("Client:");
@@ -119,7 +119,7 @@ impl Client {
     }
 }
 
-impl NTorParty for Client {
+impl NTorParty for NTorClient {
     fn get_shared_secret(&self) -> Option<Vec<u8>> {
         self.shared_secret.clone()
     }

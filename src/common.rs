@@ -21,15 +21,15 @@ impl PrivatePublicKeyPair {
 }
 
 #[derive(Clone)]
-pub struct Certificate {
+pub struct NTorCertificate {
     pub(crate) public_key: PublicKey,
     pub(crate) server_id: String,
 }
 
-impl Certificate {
+impl NTorCertificate {
     pub fn new(public_key: Vec<u8>, server_id: String) -> Self {
         let pub_key = TryInto::<[u8; 32]>::try_into(public_key).unwrap();
-        Certificate {
+        NTorCertificate {
             public_key: PublicKey::from(pub_key),
             server_id
         }

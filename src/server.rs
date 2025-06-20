@@ -2,17 +2,17 @@ use x25519_dalek::{PublicKey, StaticSecret};
 use sha2::Sha256;
 use hmac::{Hmac, Mac};
 use hmac::digest::Digest;
-use crate::common::{Certificate, InitSessionMessage, InitSessionResponse, NTorParty, PrivatePublicKeyPair};
+use crate::common::{NTorCertificate, InitSessionMessage, InitSessionResponse, NTorParty, PrivatePublicKeyPair};
 use crate::helpers::{generate_private_public_key_pair};
 
-pub struct Server {
+pub struct NTorServer {
     static_key_pair: PrivatePublicKeyPair,
     ephemeral_key_pair: PrivatePublicKeyPair,
     server_id: String,
     pub(crate) shared_secret: Option<Vec<u8>>,
 }
 
-impl Server {
+impl NTorServer {
     pub fn new(server_id: String) -> Self {
         // In the future, implementations of static and ephemeral key pair generation should differ.
         Self {
@@ -42,9 +42,9 @@ impl Server {
         }
     }
 
-    pub fn get_certificate(&self) -> Certificate {
+    pub fn get_certificate(&self) -> NTorCertificate {
         // Upon implementation and deployment, it's the Service Provider that will create and then upload a certificate to the Layer8 Authentication Server. Likely, Layer8 will also provide the necessary functions to create one for the client.
-        Certificate {
+        NTorCertificate {
             public_key: self.static_key_pair.public_key,
             server_id: self.server_id.clone(),
         }
@@ -134,7 +134,7 @@ impl Server {
     }
 }
 
-impl NTorParty for Server {
+impl NTorParty for NTorServer {
     fn get_shared_secret(&self) -> Option<Vec<u8>> {
         self.shared_secret.clone()
     }

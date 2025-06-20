@@ -1,13 +1,13 @@
-use ntor::client::Client;
-use ntor::server::Server;
+use ntor::client::NTorClient;
+use ntor::server::NTorServer;
 
 fn main() {
     // Create a new client
-    let mut client = Client::new();
+    let mut client = NTorClient::new();
 
     // Spin up a server
     let server_id = String::from("my server id");
-    let mut server = Server::new(server_id);
+    let mut server = NTorServer::new(server_id);
 
     // Client initializes session with the server
     let init_session_msg = client.initialise_session();
