@@ -1,14 +1,8 @@
 use std::convert::TryInto;
 use aes_gcm::{Aes256Gcm, Key, KeyInit, Nonce};
 use aes_gcm::aead::Aead;
-use log::error;
 use x25519_dalek::{PublicKey, StaticSecret};
 use crate::common::PrivatePublicKeyPair;
-
-// wasm incompatible imports
-use ring::aead;
-use ring::rand::{SecureRandom, SystemRandom};
-
 
 /// Returns an array of zeros if conversion fails.
 pub fn vec_to_array32(vec: Vec<u8>) -> [u8; 32] {
@@ -37,44 +31,7 @@ pub fn key_derivation(shared_secret: &Vec<u8>) -> Vec<u8> {
     encrypt_key
 }
 
-pub(crate) fn encrypt(key_bytes: Vec<u8>, mut data: Vec<u8>) -> Result<([u8; 12], Vec<u8>), &'static str> {
-    let key = aead::UnboundKey::new(&aead::AES_256_GCM, &key_bytes);
-
-    if let Err(err) = key {
-        error!("Error encrypt: {:?}", err);
-        return Err("encrypt failed")
-    }
-
-    let sealing_key = aead::LessSafeKey::new(key.unwrap());
-
-    let rng = SystemRandom::new();
-    let mut nonce_bytes = [0u8; 12];
-    rng.fill(&mut nonce_bytes).unwrap();
-    let nonce = aead::Nonce::assume_unique_for_key(nonce_bytes);
-
-    return match sealing_key.seal_in_place_append_tag(nonce, aead::Aad::empty(), &mut data) {
-        Ok(()) => {
-            Ok((nonce_bytes, data))
-        }
-        Err(err) => {
-            error!("encrypt failed {:?}", err);
-            Err("encrypt failed")
-        }
-    }
-}
-
-pub(crate) fn decrypt(nonce_bytes: [u8; 12], key_bytes: Vec<u8>, mut data: Vec<u8>) -> Result<Vec<u8>, &'static str> {
-    let key = aead::UnboundKey::new(&aead::AES_256_GCM, &key_bytes).unwrap();
-    let opening_key = aead::LessSafeKey::new(key);
-    let nonce = aead::Nonce::assume_unique_for_key(nonce_bytes);
-
-    let decrypted_data = opening_key.open_in_place(nonce, aead::Aad::empty(), &mut data).unwrap();
-
-    // debug!("Decrypted: {:?}", String::from_utf8_lossy(decrypted_data));
-    Ok(decrypted_data.to_vec())
-}
-
-pub(crate) fn wasm_encrypt(key_bytes: Vec<u8>, data: Vec<u8>) -> Result<([u8; 12], Vec<u8>), &'static str> {
+pub(crate) fn encrypt(key_bytes: Vec<u8>, data: Vec<u8>) -> Result<([u8; 12], Vec<u8>), &'static str> {
     if key_bytes.len() != 32 {
         return Err("Invalid key length for AES-256");
     }
@@ -93,7 +50,7 @@ pub(crate) fn wasm_encrypt(key_bytes: Vec<u8>, data: Vec<u8>) -> Result<([u8; 12
     Ok((nonce_bytes, ciphertext))
 }
 
-pub(crate) fn wasm_decrypt(nonce_bytes: [u8; 12], key: Vec<u8>, ciphertext: Vec<u8>) -> Result<Vec<u8>, &'static str> {
+pub(crate) fn decrypt(nonce_bytes: [u8; 12], key: Vec<u8>, ciphertext: Vec<u8>) -> Result<Vec<u8>, &'static str> {
     return match TryInto::<[u8; 32]>::try_into(key) {
         Ok(key_bytes) => {
             let key = Key::<Aes256Gcm>::from_slice(&key_bytes);

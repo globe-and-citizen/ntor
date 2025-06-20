@@ -113,7 +113,7 @@ pub trait NTorParty {
     fn wasm_encrypt(&self, data: Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), &'static str> {
         if let Some(key) = self.get_shared_secret() {
             let encrypt_key = key_derivation(&key);
-            return match helpers::wasm_encrypt(encrypt_key, data) {
+            return match helpers::encrypt(encrypt_key, data) {
                 Ok((nonce, encrypted_message)) => {
                     Ok((nonce.to_vec(), encrypted_message))
                 }
@@ -129,7 +129,7 @@ pub trait NTorParty {
             // return helpers::wasm_decrypt(nonce, decrypt_key, encrypted_message.data);
             return match TryInto::<[u8; 12]>::try_into(nonce) {
                 Ok(nonce12) => {
-                    return match helpers::wasm_decrypt(nonce12, decrypt_key, data) {
+                    return match helpers::decrypt(nonce12, decrypt_key, data) {
                         Ok(decrypted) => Ok(decrypted),
                         Err(err) => Err(err)
                     }
