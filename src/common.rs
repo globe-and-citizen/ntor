@@ -76,6 +76,10 @@ impl InitSessionResponse {
     pub fn public_key(&self) -> Vec<u8> {
         self.server_ephemeral_public_key.to_bytes().to_vec()
     }
+
+    pub fn t_b_hash(&self) -> Vec<u8> {
+        self.t_b_hash.clone()
+    }
 }
 
 pub struct EncryptedMessage {
