@@ -138,4 +138,8 @@ impl NTorParty for NTorServer {
     fn get_shared_secret(&self) -> Option<Vec<u8>> {
         self.shared_secret.clone()
     }
+
+    fn set_shared_secret(&mut self, shared_secret: Vec<u8>) {
+        self.shared_secret = Some(shared_secret);
+    }
 }

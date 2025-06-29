@@ -90,6 +90,8 @@ pub struct EncryptedMessage {
 pub trait NTorParty {
     fn get_shared_secret(&self) -> Option<Vec<u8>>;
 
+    fn set_shared_secret(&mut self, shared_secret: Vec<u8>);
+
     fn encrypt(&self, data: Vec<u8>) -> Result<EncryptedMessage, &'static str> {
         if let Some(key) = self.get_shared_secret() {
             let encrypt_key = key_derivation(&key);
