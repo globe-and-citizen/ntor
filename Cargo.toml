@@ -21,4 +21,6 @@ serde = { version = "1.0.219", features = ["derive"] }
 
 log = "0.4.26"
 hex = "0.4.3"
+boring = "4.17.0"
+pem = "3.0.5"
 
