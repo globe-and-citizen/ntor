@@ -119,14 +119,13 @@ pub trait NTorParty {
         )
     }
 
-    fn wasm_encrypt(&self, data: &[u8]) -> Result<(Vec<u8>, Vec<u8>), &'static str> {
+    fn wasm_encrypt(&self, data: &[u8]) -> Result<([u8; 12], Vec<u8>), &'static str> {
         let Some(key) = self.get_shared_secret() else {
             return Err("no encryption key found");
         };
 
         let encrypt_key = key_derivation(key)?;
         helpers::encrypt(&encrypt_key, data)
-            .map(|(nonce, encrypted_message)| (nonce.to_vec(), encrypted_message))
     }
 
     fn wasm_decrypt(&self, nonce: &[u8; 12], data: &[u8]) -> Result<Vec<u8>, &'static str> {
