@@ -1,15 +1,11 @@
-use x25519_dalek::PublicKey;
-use sha2::Sha256;
-use hmac::{Hmac, Mac};
-use hmac::digest::Digest;
 use crate::common::{
-    NTorCertificate,
-    InitSessionMessage,
-    InitSessionResponse,
-    NTorParty,
-    PrivatePublicKeyPair
+    InitSessionMessage, InitSessionResponse, NTorCertificate, NTorParty, PrivatePublicKeyPair,
 };
-use crate::helpers::{generate_private_public_key_pair};
+use crate::helpers::generate_private_public_key_pair;
+use hmac::digest::Digest;
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
+use x25519_dalek::PublicKey;
 
 #[derive(Clone)]
 pub struct NTorClient {
@@ -119,9 +115,15 @@ impl NTorClient {
     }
 }
 
+impl Default for NTorClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NTorParty for NTorClient {
-    fn get_shared_secret(&self) -> Option<Vec<u8>> {
-        self.shared_secret.clone()
+    fn get_shared_secret(&self) -> Option<&[u8]> {
+        self.shared_secret.as_deref()
     }
 
     fn set_shared_secret(&mut self, shared_secret: Vec<u8>) {

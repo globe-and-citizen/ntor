@@ -1,4 +1,5 @@
 use x25519_dalek::{PublicKey, StaticSecret};
+
 use crate::helpers;
 use crate::helpers::{key_derivation, vec_to_array32};
 
@@ -31,7 +32,7 @@ impl NTorCertificate {
         let pub_key = TryInto::<[u8; 32]>::try_into(public_key).unwrap();
         NTorCertificate {
             public_key: PublicKey::from(pub_key),
-            server_id
+            server_id,
         }
     }
 
@@ -53,8 +54,8 @@ impl InitSessionMessage {
         }
     }
 
-    pub fn public_key(&self) -> Vec<u8> {
-        self.client_ephemeral_public_key.to_bytes().to_vec()
+    pub fn public_key(&self) -> &[u8; 32] {
+        self.client_ephemeral_public_key.as_bytes()
     }
 }
 
@@ -67,82 +68,73 @@ pub struct InitSessionResponse {
 impl InitSessionResponse {
     pub fn new(public_key: Vec<u8>, t_b_hash: Vec<u8>) -> Self {
         let pub_key = TryInto::<[u8; 32]>::try_into(public_key).unwrap();
-        return InitSessionResponse {
+        InitSessionResponse {
             server_ephemeral_public_key: PublicKey::from(pub_key),
             t_b_hash,
         }
     }
 
-    pub fn public_key(&self) -> Vec<u8> {
-        self.server_ephemeral_public_key.to_bytes().to_vec()
+    pub fn public_key(&self) -> &[u8; 32] {
+        self.server_ephemeral_public_key.as_bytes()
     }
 
-    pub fn t_b_hash(&self) -> Vec<u8> {
-        self.t_b_hash.clone()
+    pub fn t_b_hash(&self) -> &[u8] {
+        &self.t_b_hash
     }
 }
 
+#[derive(bincode::Encode, bincode::Decode)]
 pub struct EncryptedMessage {
     pub nonce: [u8; 12],
-    pub data: Vec<u8>
+    pub data: Vec<u8>,
 }
 
 pub trait NTorParty {
-    fn get_shared_secret(&self) -> Option<Vec<u8>>;
+    fn get_shared_secret(&self) -> Option<&[u8]>;
 
     fn set_shared_secret(&mut self, shared_secret: Vec<u8>);
 
-    fn encrypt(&self, data: Vec<u8>) -> Result<EncryptedMessage, &'static str> {
-        if let Some(key) = self.get_shared_secret() {
-            let encrypt_key = key_derivation(&key);
-            return match helpers::encrypt(encrypt_key, data) {
-                Ok((nonce, encrypted_message)) => {
-                    Ok(EncryptedMessage {
-                        nonce,
-                        data: encrypted_message,
-                    })
-                }
-                Err(err) => Err(err)
-            }
-        }
-        Err("no encryption key found")
+    fn encrypt(&self, data: &[u8]) -> Result<EncryptedMessage, &'static str> {
+        let Some(key) = self.get_shared_secret() else {
+            return Err("no encryption key found");
+        };
+
+        let encrypt_key = key_derivation(key)?;
+        helpers::encrypt(&encrypt_key, data).map(|(nonce, encrypted_message)| EncryptedMessage {
+            nonce,
+            data: encrypted_message,
+        })
     }
 
     fn decrypt(&self, encrypted_message: EncryptedMessage) -> Result<Vec<u8>, &'static str> {
-        if let Some(key) = self.get_shared_secret() {
-            let decrypt_key = key_derivation(&key);
-            return helpers::decrypt(encrypted_message.nonce, decrypt_key, encrypted_message.data);
-        }
-        Err("no decryption key found")
+        let Some(key) = self.get_shared_secret() else {
+            return Err("no decryption key found");
+        };
+
+        let decrypt_key = key_derivation(key)?;
+        helpers::decrypt(
+            &encrypted_message.nonce,
+            &decrypt_key,
+            &encrypted_message.data,
+        )
     }
 
-    fn wasm_encrypt(&self, data: Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), &'static str> {
-        if let Some(key) = self.get_shared_secret() {
-            let encrypt_key = key_derivation(&key);
-            return match helpers::encrypt(encrypt_key, data) {
-                Ok((nonce, encrypted_message)) => {
-                    Ok((nonce.to_vec(), encrypted_message))
-                }
-                Err(err) => Err(err)
-            }
-        }
-        Err("no encryption key found")
+    fn wasm_encrypt(&self, data: &[u8]) -> Result<(Vec<u8>, Vec<u8>), &'static str> {
+        let Some(key) = self.get_shared_secret() else {
+            return Err("no encryption key found");
+        };
+
+        let encrypt_key = key_derivation(key)?;
+        helpers::encrypt(&encrypt_key, data)
+            .map(|(nonce, encrypted_message)| (nonce.to_vec(), encrypted_message))
     }
 
-    fn wasm_decrypt(&self, nonce: Vec<u8>, data: Vec<u8>) -> Result<Vec<u8>, &'static str> {
-        if let Some(key) = self.get_shared_secret() {
-            let decrypt_key = key_derivation(&key);
-            // return helpers::wasm_decrypt(nonce, decrypt_key, encrypted_message.data);
-            return match TryInto::<[u8; 12]>::try_into(nonce) {
-                Ok(nonce12) => {
-                    return match helpers::decrypt(nonce12, decrypt_key, data) {
-                        Ok(decrypted) => Ok(decrypted),
-                        Err(err) => Err(err)
-                    }
-                },
-                Err(_err) => Err("invalid nonce")
-            }
-        }
-        Err("no decryption key found")
+    fn wasm_decrypt(&self, nonce: &[u8; 12], data: &[u8]) -> Result<Vec<u8>, &'static str> {
+        let Some(key) = self.get_shared_secret() else {
+            return Err("no decryption key found");
+        };
+
+        let decrypt_key = key_derivation(key)?;
+        helpers::decrypt(nonce, &decrypt_key, data)
     }
 }

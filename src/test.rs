@@ -44,4 +44,26 @@ mod tests {
         assert!(success_flag);
         assert_eq!(client.shared_secret, server.shared_secret)
     }
+
+    #[test]
+    fn dry_run_test() {
+        // Create a new client
+        let mut client = crate::client::NTorClient::new();
+
+        // Spin up a server
+        let server_id = String::from("my server id");
+        let mut server = crate::server::NTorServer::new(server_id);
+
+        // Client initializes session with the server
+        let init_session_msg = client.initialise_session();
+
+        // Server accepts the connection request and processes it
+        let init_session_response = server.accept_init_session_request(&init_session_msg);
+
+        // Client processes response from the server and verifies it authenticity
+        let success_flag =
+            client.handle_response_from_server(&server.get_certificate(), &init_session_response);
+
+        println!("{success_flag}");
+    }
 }
