@@ -56,8 +56,6 @@ impl NTorServer {
         &mut self,
         init_msg: &InitSessionMessage,
     ) -> InitSessionResponse {
-        println!("Server:");
-
         // generate session-specific ephemeral key pair
         self.ephemeral_key_pair = generate_private_public_key_pair();
 
@@ -68,7 +66,7 @@ impl NTorServer {
             .diffie_hellman(&init_msg.client_ephemeral_public_key)
             .to_bytes()
             .to_vec();
-        println!("[Debug] ECDH result 1: {:?}", ecdh_results_1);
+
         buffer.append(&mut ecdh_results_1);
 
         // client_ephemeral_public^server_static_private (X^b),
@@ -77,7 +75,7 @@ impl NTorServer {
             .diffie_hellman(&init_msg.client_ephemeral_public_key)
             .to_bytes()
             .to_vec();
-        println!("[Debug] ECDH result 2: {:?}", ecdh_results_2);
+
         buffer.append(&mut ecdh_results_2);
 
         // server id
@@ -105,7 +103,6 @@ impl NTorServer {
 
         let secret_key_prime = &sha256_hash[0..16];
         let secret_key = &sha256_hash[16..];
-        println!("[Debug] Server secret key prime: {:?}", secret_key_prime);
 
         // Step 12: Compute HMAC (t_b in the paper):
         let mut hmac_key_buffer: Vec<u8> = Vec::new();
@@ -125,9 +122,6 @@ impl NTorServer {
         let t_b_hash = hmac_hash.finalize().into_bytes().to_vec();
 
         self.shared_secret = Some(secret_key.to_vec());
-
-        println!("Shared secret:");
-        println!("{:?}\n", secret_key);
 
         InitSessionResponse {
             server_ephemeral_public_key: self.ephemeral_key_pair.public_key,
