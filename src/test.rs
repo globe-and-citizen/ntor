@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use crate::{Client, Server, generate_private_public_key_pair};
+    use crate::client::NTorClient;
+    use crate::helpers::generate_private_public_key_pair;
+    use crate::server::NTorServer;
 
     #[test]
     fn test_generate_private_public_key_pair() {
@@ -24,10 +26,10 @@ mod tests {
     #[test]
     fn test_ntor_handshake_shared_secret_generation() {
         // Create a new client
-        let mut client = Client::new();
+        let mut client = NTorClient::new();
 
         // Spin up a server
-        let mut server = Server::new(String::from("test_server_id"));
+        let mut server = NTorServer::new(String::from("test_server_id"));
 
         // Client initializes session with the server
         let init_session_msg = client.initialise_session();
