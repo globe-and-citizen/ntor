@@ -82,6 +82,7 @@ impl InitSessionResponse {
     }
 }
 
+#[derive(bincode::Encode, bincode::Decode)]
 pub struct EncryptedMessage {
     pub nonce: [u8; 12],
     pub data: Vec<u8>
