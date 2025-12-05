@@ -42,8 +42,6 @@ impl NTorClient {
         server_certificate: &NTorCertificate,
         msg: &InitSessionResponse,
     ) -> bool {
-        println!("Client:");
-
         // Step 18: Compute the shared secret.
         let mut buffer: Vec<u8> = Vec::new();
 
@@ -53,7 +51,6 @@ impl NTorClient {
             .diffie_hellman(&msg.server_ephemeral_public_key)
             .to_bytes()
             .to_vec();
-        println!("[Debug] ECDH result 1: {:?}", ecdh_result_1);
         buffer.append(&mut ecdh_result_1);
 
         // ECDH Client private ephemeral * server ephemeral public Key
@@ -61,7 +58,6 @@ impl NTorClient {
             .diffie_hellman(&server_certificate.public_key)
             .to_bytes()
             .to_vec();
-        println!("[Debug] ECDH result 2: {:?}", ecdh_result_2);
         buffer.append(&mut ecdh_result_2);
 
         // Server id
@@ -88,7 +84,6 @@ impl NTorClient {
         };
 
         let secret_key_prime = &sha256_hash[0..16];
-        println!("[Debug] Client secret key prime: {:?}", secret_key_prime);
 
         let secret_key = &sha256_hash[16..];
 
@@ -109,11 +104,8 @@ impl NTorClient {
         if computed_t_b_hash == msg.t_b_hash {
             self.shared_secret = Some(secret_key.to_vec());
 
-            println!("Shared secret:");
-            println!("{:?}\n", secret_key);
             true
         } else {
-            println!("Failed to verify the shared secret: try again bro.");
             false
         }
     }
