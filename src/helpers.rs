@@ -51,7 +51,7 @@ pub(crate) fn encrypt(key_bytes: Vec<u8>, data: Vec<u8>) -> Result<([u8; 12], Ve
 }
 
 pub(crate) fn decrypt(nonce_bytes: [u8; 12], key: Vec<u8>, ciphertext: Vec<u8>) -> Result<Vec<u8>, &'static str> {
-    return match TryInto::<[u8; 32]>::try_into(key) {
+    match TryInto::<[u8; 32]>::try_into(key) {
         Ok(key_bytes) => {
             let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
             let cipher = Aes256Gcm::new(key);

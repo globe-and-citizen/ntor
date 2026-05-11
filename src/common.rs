@@ -1,3 +1,4 @@
+use bincode::error::DecodeError;
 use x25519_dalek::{PublicKey, StaticSecret};
 use crate::helpers;
 use crate::helpers::{key_derivation, vec_to_array32};
@@ -67,7 +68,7 @@ pub struct InitSessionResponse {
 impl InitSessionResponse {
     pub fn new(public_key: Vec<u8>, t_b_hash: Vec<u8>) -> Self {
         let pub_key = TryInto::<[u8; 32]>::try_into(public_key).unwrap();
-        return InitSessionResponse {
+        InitSessionResponse {
             server_ephemeral_public_key: PublicKey::from(pub_key),
             t_b_hash,
         }
@@ -82,10 +83,20 @@ impl InitSessionResponse {
     }
 }
 
-#[derive(bincode::Encode, bincode::Decode)]
+#[derive(bincode::Encode, bincode::Decode, Clone, Debug, PartialEq)]
 pub struct EncryptedMessage {
     pub nonce: [u8; 12],
     pub data: Vec<u8>
+}
+
+impl EncryptedMessage {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        bincode::encode_to_vec(self, bincode::config::standard()).unwrap_or_default()
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Box<Self>, DecodeError> {
+        bincode::decode_from_slice(&bytes, bincode::config::standard()).map(|(body, _)| Box::new(body))
+    }
 }
 
 pub trait NTorParty {
